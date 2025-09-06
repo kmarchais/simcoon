@@ -92,25 +92,42 @@ endif()
 include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})
 
 # Boost - handle both old FindBoost and new BoostConfig
-# Try new Boost config first (Boost 1.70+)
+# First try new Boost CONFIG mode without components
 find_package(Boost 1.57.0 QUIET CONFIG)
-if(Boost_FOUND)
-  # New Boost CMake config - find individual components
-  find_package(boost_system REQUIRED)
-  find_package(boost_filesystem REQUIRED)
-  find_package(boost_atomic REQUIRED)
-  set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
-  message(STATUS "Using new Boost CMake config")
-else()
-  # Fall back to old FindBoost module
-  find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
+if(Boost_FOUND AND TARGET Boost::filesystem AND TARGET Boost::atomic)
+  # New Boost CMake config - targets are available directly
+  # Note: Boost::system is header-only since Boost 1.69 and may not be available as a target
   if(TARGET Boost::system)
     set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
   else()
+    set(BOOST_LIBRARIES Boost::filesystem Boost::atomic)
+  endif()
+  message(STATUS "Using new Boost CMake config with targets")
+else()
+  # Fall back to old FindBoost module with components
+  # Set policy to allow deprecated FindBoost module
+  cmake_policy(PUSH)
+  if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+  endif()
+  
+  find_package(Boost 1.57.0 REQUIRED COMPONENTS filesystem atomic)
+  
+  cmake_policy(POP)
+  
+  if(TARGET Boost::filesystem)
+    # Include Boost::system only if it exists (may not be available in newer versions as it's header-only)
+    if(TARGET Boost::system)
+      set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
+    else()
+      set(BOOST_LIBRARIES Boost::filesystem Boost::atomic)
+    endif()
+    message(STATUS "Using legacy FindBoost module with targets")
+  else()
     include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
     set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+    message(STATUS "Using legacy FindBoost module with variables")
   endif()
-  message(STATUS "Using legacy FindBoost module")
 endif()
 
 message(STATUS "Dependencies found successfully")
