@@ -139,7 +139,6 @@ jobs:
           cmake -S . -B build `
               -DCMAKE_BUILD_TYPE=Release `
               -DCMAKE_INSTALL_PREFIX="$env:CONDA_PREFIX/Library" `
-              -DUSE_CARMA=False `
               -Wno-dev
           cmake --build build --config Release
           cmake --install build

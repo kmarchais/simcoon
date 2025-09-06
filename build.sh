@@ -7,7 +7,7 @@ rm -rf install
 rm -rf python/build
 
 # Build everything with unified CMake (Python bindings ON by default)
-uv run cmake -S . -B build -D USE_CARMA=ON
+uv run cmake -S . -B build
 uv run cmake --build build --config Release
 uv run cmake --install build --prefix install
 

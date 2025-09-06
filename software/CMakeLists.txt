@@ -10,11 +10,7 @@ foreach(exe ${EXECUTABLES})
   add_executable(${exe} ${exe}.cpp)
 
   # Link with required libraries
-  if (MSVC AND USE_CARMA AND TARGET carma::carma)
-    target_link_libraries(${exe} simcoon ${ARMADILLO_LIBRARIES} carma::carma)
-  else()
-    target_link_libraries(${exe} simcoon ${ARMADILLO_LIBRARIES})
-  endif()
+  target_link_libraries(${exe} simcoon ${ARMADILLO_LIBRARIES})
   
   # Link with dl library on Unix systems
   if(NOT WIN32)

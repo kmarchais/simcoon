@@ -30,11 +30,7 @@ endif()
 add_library(umat_plugin_ext SHARED ${CMAKE_SOURCE_DIR}/testBin/Umats/UMEXT/external/umat_plugin_ext.cpp)
 if(MSVC)
   set_target_properties(umat_plugin_ext PROPERTIES PREFIX "" SUFFIX ".dll")
-  if (USE_CARMA AND TARGET carma::carma)
-    target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES} carma::carma)
-  else()
-    target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES})
-  endif()
+  target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES})
 else()
   set_target_properties(umat_plugin_ext PROPERTIES 
     PREFIX "" 
@@ -53,11 +49,7 @@ foreach(testSrc ${TEST_SRCS})
 
   add_executable(${testName} ${testSrc})
 
-  if (MSVC AND USE_CARMA AND TARGET carma::carma)
-    target_link_libraries(${testName} simcoon ${ARMADILLO_LIBRARIES} GTest::gtest GTest::gtest_main carma::carma)
-  else()
-    target_link_libraries(${testName} simcoon ${ARMADILLO_LIBRARIES} GTest::gtest GTest::gtest_main)
-  endif()
+  target_link_libraries(${testName} simcoon ${ARMADILLO_LIBRARIES} GTest::gtest GTest::gtest_main)
   target_include_directories(${testName} PRIVATE ${ARMADILLO_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})
 
   set_target_properties(${testName} PROPERTIES 

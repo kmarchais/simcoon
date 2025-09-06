@@ -23,8 +23,6 @@ message(STATUS "Configuring ${PROJECT_NAME} ${PROJECT_VERSION}")
 # Adhere to GNU filesystem layout conventions
 include(GNUInstallDirs)
 
-# We default to debugging mode for developers.
-option(DEBUG "Compile with debugging information" OFF)
 # Build options
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -35,19 +33,69 @@ endif()
 # Python bindings option (default ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
-if (NOT DEFINED USE_CARMA)
-  set(USE_CARMA True)
-endif()
+# Build tests option (default ON)
+option(BUILD_TESTS "Build tests" ON)
 
 message(STATUS "Build type             = ${CMAKE_BUILD_TYPE}")
 message(STATUS "BUILD_PYTHON_BINDINGS  = ${BUILD_PYTHON_BINDINGS}")
-message(STATUS "USE_CARMA              = ${USE_CARMA}")
+message(STATUS "BUILD_TESTS            = ${BUILD_TESTS}")
 
-# Put our local cmake find scripts at the beginning of the cmake module search path
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
+# Dependency Management
+message(STATUS "Finding dependencies...")
 
-# Include shared dependency finding
-include(${PROJECT_SOURCE_DIR}/cmake/FindDependencies.cmake)
+# BLAS/LAPACK configuration
+if (MSVC)
+  set(BLA_PKGCONFIG_BLAS True)
+  set(CMAKE_FIND_DEBUG_MODE FALSE)
+endif()
+
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
+
+# Override debug libraries with release versions for MSVC builds
+if(MSVC AND BLAS_FOUND AND LAPACK_FOUND)
+  string(REPLACE "/debug/lib/" "/lib/" BLAS_LIBRARIES_RELEASE "${BLAS_LIBRARIES}")
+  string(REPLACE "/debug/lib/" "/lib/" LAPACK_LIBRARIES_RELEASE "${LAPACK_LIBRARIES}")
+  
+  set(USE_RELEASE_LIBS TRUE)
+  foreach(lib ${BLAS_LIBRARIES_RELEASE} ${LAPACK_LIBRARIES_RELEASE})
+    if(NOT EXISTS "${lib}")
+      set(USE_RELEASE_LIBS FALSE)
+      break()
+    endif()
+  endforeach()
+  
+  if(USE_RELEASE_LIBS)
+    set(BLAS_LIBRARIES ${BLAS_LIBRARIES_RELEASE})
+    set(LAPACK_LIBRARIES ${LAPACK_LIBRARIES_RELEASE})
+    message(STATUS "Using release BLAS/LAPACK libraries instead of debug")
+  endif()
+endif()
+
+# Armadillo
+find_package(Armadillo 12.6 REQUIRED)
+
+# GTest for testing (only if building tests)
+if(BUILD_TESTS)
+  find_package(GTest REQUIRED)
+endif()
+
+# Configure Armadillo libraries
+if (MSVC)
+  set(ARMADILLO_LIBRARIES ${ARMADILLO_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+  if(USE_RELEASE_LIBS)
+    string(REPLACE "/debug/lib/" "/lib/" ARMADILLO_LIBRARIES "${ARMADILLO_LIBRARIES}")
+    message(STATUS "Fixed ARMADILLO_LIBRARIES to use release versions")
+  endif()
+endif()
+
+include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})
+
+# Boost
+find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
+include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+
+message(STATUS "Dependencies found successfully")
 
 #Setup CMake to run tests
 enable_testing()
@@ -55,8 +103,6 @@ enable_testing()
 #Set executable files and library files
 set(EXECUTABLE_OUTPUT_PATH bin)
 set(LIBRARY_OUTPUT_PATH lib)
-
-# Dependencies are now handled by cmake/FindDependencies.cmake
 
 # OpenMP
 #include(FindOpenMP)
@@ -89,7 +135,7 @@ elseif (UNIX AND NOT APPLE)
   #enable Fortran
   enable_language(Fortran)
 
-  if (DEBUG)
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -O0 -Drestrict=")
       set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -std=c++20")
       set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -std=c++20")
@@ -102,7 +148,7 @@ else()
   #enable Fortran
   enable_language(Fortran)
 
-  if (DEBUG)
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -stdlib=libc++ -O0 -fpermissive -Drestrict=")
       set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -std=c++20 -stdlib=libc++")
       set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -std=c++20 -stdlib=libc++")
@@ -146,17 +192,15 @@ set(objs
 #Add the files to the lib
 add_library(simcoon SHARED ${source_files})
 #link against armadillo and boost
-if (MSVC AND USE_CARMA AND TARGET carma::carma)
-  target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} carma::carma Boost::system Boost::filesystem Boost::atomic)
-else()
-  target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} Boost::system Boost::filesystem Boost::atomic)
-endif()
+target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} Boost::system Boost::filesystem Boost::atomic)
 
 # Include software executables
 add_subdirectory(software)
 
-# Include tests
-add_subdirectory(tests)
+# Include tests (optional)
+if(BUILD_TESTS)
+  add_subdirectory(tests)
+endif()
 
 # Include Python bindings (optional)
 if(BUILD_PYTHON_BINDINGS)
