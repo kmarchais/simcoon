@@ -146,7 +146,7 @@ set(objs
 #Add the files to the lib
 add_library(simcoon SHARED ${source_files})
 #link against armadillo and boost
-if (MSVC AND USE_CARMA)
+if (MSVC AND USE_CARMA AND TARGET carma::carma)
   target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} carma::carma Boost::system Boost::filesystem Boost::atomic)
 else()
   target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} Boost::system Boost::filesystem Boost::atomic)
@@ -164,7 +164,22 @@ if(BUILD_PYTHON_BINDINGS)
     
     # Check if Python dependencies are available
     find_package(Python3 COMPONENTS Interpreter Development NumPy QUIET)
+    
+    # Try to find pybind11, including via pip install
     find_package(pybind11 QUIET)
+    if(NOT pybind11_FOUND AND Python3_FOUND)
+        # Try to find pybind11 via Python's site-packages
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} -m pybind11 --cmakedir
+            OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE PYBIND11_CMAKE_RESULT
+        )
+        if(PYBIND11_CMAKE_RESULT EQUAL 0 AND EXISTS ${PYBIND11_CMAKE_DIR})
+            set(pybind11_DIR ${PYBIND11_CMAKE_DIR})
+            find_package(pybind11 QUIET)
+        endif()
+    endif()
     
     if(Python3_FOUND AND Python3_NumPy_FOUND AND pybind11_FOUND)
         message(STATUS "Python dependencies found - building Python bindings")

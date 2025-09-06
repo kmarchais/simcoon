@@ -29,14 +29,12 @@ if(NOT carma_FOUND)
   FetchContent_MakeAvailable(carma)
 endif()
 
-# Find simcoon library (built by root CMakeLists.txt)
-find_package(simcoon REQUIRED)
+# Use simcoon library target (built by root CMakeLists.txt)
+# Note: simcoon target is defined by parent CMakeLists.txt
 
 # Include directories
 include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})
-include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
-include_directories(SYSTEM ${SIMCOON_INCLUDE_DIRS})
-include_directories(SYSTEM ${CARMA_INCLUDE_DIR})
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/include)
 include_directories(include)
 
 # OpenMP support (optional)
@@ -84,7 +82,7 @@ else()
 endif()
 
 # Link libraries
-target_link_libraries(simmit PRIVATE ${ARMADILLO_LIBRARIES} carma::carma Python3::Module ${SIMCOON_LIBRARIES})
+target_link_libraries(simmit PRIVATE simcoon ${ARMADILLO_LIBRARIES} carma::carma Python3::Module)
 if (USE_OPENMP AND OpenMP_CXX_FOUND)
   target_link_libraries(simmit PUBLIC OpenMP::OpenMP_CXX)
 endif()
@@ -98,31 +96,25 @@ file(MAKE_DIRECTORY ${PYTHON_PACKAGE_DIR})
 # Install Python extension
 install(TARGETS simmit DESTINATION ${PYTHON_PACKAGE_DIR})
 
-# Install simcoon library
-if(APPLE)
-  set(SIMCOON_LIB_FILE ${SIMCOON_LIBRARIES})
-elseif(UNIX)
-  set(SIMCOON_LIB_FILE ${SIMCOON_LIBRARIES})
-elseif(WIN32)
-  get_filename_component(SIMCOON_DIR ${SIMCOON_LIBRARIES} DIRECTORY)
-  set(SIMCOON_LIB_FILE "${SIMCOON_DIR}/../bin/simcoon.dll")
-endif()
-
-install(FILES ${SIMCOON_LIB_FILE} DESTINATION ${PYTHON_PACKAGE_DIR})
-
-# Install Windows DLL dependencies
+# Install simcoon library and dependencies
 if(WIN32)
-  get_filename_component(SIMCOON_BIN_DIR ${SIMCOON_LIB_FILE} DIRECTORY)
-  file(GLOB INSTALL_DLLS "${SIMCOON_BIN_DIR}/*.dll")
-  if(INSTALL_DLLS)
-    install(FILES ${INSTALL_DLLS} DESTINATION ${PYTHON_PACKAGE_DIR})
-    foreach(DLL_FILE ${INSTALL_DLLS})
-      get_filename_component(DLL_NAME ${DLL_FILE} NAME)
-      message(STATUS "Installing dependency DLL: ${DLL_NAME}")
-    endforeach()
-  else()
-    message(WARNING "No DLLs found in install/bin directory: ${SIMCOON_BIN_DIR}")
-  endif()
+  # For Windows, install the simcoon DLL
+  install(TARGETS simcoon DESTINATION ${PYTHON_PACKAGE_DIR})
+  
+  # Copy DLLs immediately after build to the source tree for development
+  add_custom_command(TARGET simmit POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${CMAKE_BINARY_DIR}/bin
+      ${PYTHON_PACKAGE_DIR}
+    COMMENT "Copying DLLs to Python package directory for development")
+  
+  # Install additional DLLs from build directory  
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/
+          DESTINATION ${PYTHON_PACKAGE_DIR}
+          FILES_MATCHING PATTERN "*.dll")
+else()
+  # For Unix systems, install the simcoon shared library
+  install(TARGETS simcoon DESTINATION ${PYTHON_PACKAGE_DIR})
 endif()
 
 # Tests

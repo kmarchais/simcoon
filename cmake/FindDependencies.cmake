@@ -30,8 +30,11 @@ if(MSVC AND BLAS_FOUND AND LAPACK_FOUND)
     set(LAPACK_LIBRARIES ${LAPACK_LIBRARIES_RELEASE})
     message(STATUS "Using release BLAS/LAPACK libraries instead of debug")
   endif()
-  # Export USE_RELEASE_LIBS for parent scope
-  set(USE_RELEASE_LIBS ${USE_RELEASE_LIBS} PARENT_SCOPE)
+  # Export USE_RELEASE_LIBS for parent scope (only if we have a parent)
+  get_directory_property(HAS_PARENT PARENT_DIRECTORY)
+  if(HAS_PARENT)
+    set(USE_RELEASE_LIBS ${USE_RELEASE_LIBS} PARENT_SCOPE)
+  endif()
 endif()
 
 # Armadillo
@@ -40,9 +43,12 @@ find_package(Armadillo 12.6 REQUIRED)
 # GTest for testing
 find_package(GTest REQUIRED)
 
-# Carma for NumPy integration
+# Carma for NumPy integration (optional, mainly for MSVC)
 if (MSVC AND USE_CARMA)
-  find_package(Carma REQUIRED)
+  find_package(Carma QUIET)
+  if(NOT Carma_FOUND)
+    message(STATUS "Carma not found via find_package, will be fetched by Python bindings if needed")
+  endif()
 endif()
 
 # Configure Armadillo libraries
