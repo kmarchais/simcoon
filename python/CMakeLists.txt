@@ -64,13 +64,15 @@ pybind11_add_module(simmit ${PYTHON_WRAPPER_SOURCES})
 # Set RPATH for Unix systems
 if(APPLE)
   set_target_properties(simmit PROPERTIES
-      INSTALL_RPATH "@loader_path"
+      INSTALL_RPATH "@loader_path;@loader_path/.."
       BUILD_WITH_INSTALL_RPATH ON
+      BUILD_RPATH "@loader_path;@loader_path/.."
   )
 elseif(UNIX)
   set_target_properties(simmit PROPERTIES
-      INSTALL_RPATH "$ORIGIN"
+      INSTALL_RPATH "$ORIGIN:$ORIGIN/.."
       BUILD_WITH_INSTALL_RPATH ON
+      BUILD_RPATH "$ORIGIN:$ORIGIN/.."
   )
 endif()
 
@@ -115,6 +117,21 @@ if(WIN32)
 else()
   # For Unix systems, install the simcoon shared library
   install(TARGETS simcoon DESTINATION ${PYTHON_PACKAGE_DIR})
+  
+  # Copy simcoon library immediately after build to the source tree for development
+  if(APPLE)
+    add_custom_command(TARGET simmit POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:simcoon>
+        ${PYTHON_PACKAGE_DIR}/
+      COMMENT "Copying simcoon library to Python package directory for development")
+  else()
+    add_custom_command(TARGET simmit POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:simcoon>
+        ${PYTHON_PACKAGE_DIR}/
+      COMMENT "Copying simcoon library to Python package directory for development")
+  endif()
 endif()
 
 # Tests
