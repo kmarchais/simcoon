@@ -91,9 +91,16 @@ endif()
 
 include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})
 
-# Boost
+# Boost - handle both old FindBoost and new BoostConfig
 find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
-include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+if(TARGET Boost::system)
+  # New Boost CMake config (Boost 1.70+)
+  set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
+else()
+  # Old FindBoost module
+  include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+  set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+endif()
 
 message(STATUS "Dependencies found successfully")
 
@@ -192,7 +199,7 @@ set(objs
 #Add the files to the lib
 add_library(simcoon SHARED ${source_files})
 #link against armadillo and boost
-target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} Boost::system Boost::filesystem Boost::atomic)
+target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} ${BOOST_LIBRARIES})
 
 # Include software executables
 add_subdirectory(software)
