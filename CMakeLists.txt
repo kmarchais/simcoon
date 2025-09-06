@@ -7,7 +7,7 @@ include(CheckIncludeFileCXX)
 include(CheckLibraryExists)
 
 # Read version from Python package
-file(READ "python-setup/simcoon/__version__.py" VERSION_FILE)
+file(READ "src/python/simcoon/__version__.py" VERSION_FILE)
 string(REGEX MATCH "__version__ = \"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${VERSION_FILE})
 set(PROJECT_VERSION ${CMAKE_MATCH_1})
 
@@ -25,22 +25,29 @@ include(GNUInstallDirs)
 
 # We default to debugging mode for developers.
 option(DEBUG "Compile with debugging information" OFF)
-# Build type
-if(NOT CMAKE_BUILD_TYPE)  # Debug by default
+# Build options
+if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING
         "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel"
         FORCE)
 endif()
+
+# Python bindings option (default ON)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+
 if (NOT DEFINED USE_CARMA)
   set(USE_CARMA True)
 endif()
 
-message(STATUS "Build type ${CMAKE_BUILD_TYPE}")
-message(STATUS "USE_CARMA          = ${USE_CARMA}"         )
+message(STATUS "Build type             = ${CMAKE_BUILD_TYPE}")
+message(STATUS "BUILD_PYTHON_BINDINGS  = ${BUILD_PYTHON_BINDINGS}")
+message(STATUS "USE_CARMA              = ${USE_CARMA}")
 
-# put our local cmake find scripts at the beginning of the cmake
-# module search path
+# Put our local cmake find scripts at the beginning of the cmake module search path
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
+
+# Include shared dependency finding
+include(${PROJECT_SOURCE_DIR}/cmake/FindDependencies.cmake)
 
 #Setup CMake to run tests
 enable_testing()
@@ -49,62 +56,7 @@ enable_testing()
 set(EXECUTABLE_OUTPUT_PATH bin)
 set(LIBRARY_OUTPUT_PATH lib)
 
-#Inclusion of Armadillo
-if (MSVC)
-  set(BLA_PKGCONFIG_BLAS True)
-  # Try to guide CMake to prefer release libraries
-  set(CMAKE_FIND_DEBUG_MODE FALSE)
-endif()
-
-find_package(BLAS REQUIRED)
-find_package(LAPACK REQUIRED)
-
-# Override debug libraries with release versions for MSVC builds
-if(MSVC AND BLAS_FOUND AND LAPACK_FOUND)
-  # Replace debug paths with release paths
-  string(REPLACE "/debug/lib/" "/lib/" BLAS_LIBRARIES_RELEASE "${BLAS_LIBRARIES}")
-  string(REPLACE "/debug/lib/" "/lib/" LAPACK_LIBRARIES_RELEASE "${LAPACK_LIBRARIES}")
-  
-  # Check if release libraries exist and use them
-  set(USE_RELEASE_LIBS TRUE)
-  foreach(lib ${BLAS_LIBRARIES_RELEASE} ${LAPACK_LIBRARIES_RELEASE})
-    if(NOT EXISTS "${lib}")
-      set(USE_RELEASE_LIBS FALSE)
-      break()
-    endif()
-  endforeach()
-  
-  if(USE_RELEASE_LIBS)
-    set(BLAS_LIBRARIES ${BLAS_LIBRARIES_RELEASE})
-    set(LAPACK_LIBRARIES ${LAPACK_LIBRARIES_RELEASE})
-    message(STATUS "Using release BLAS/LAPACK libraries instead of debug")
-  endif()
-endif()
-
-find_package(Armadillo 12.6 REQUIRED)
-
-find_package(GTest REQUIRED)
-
-if (MSVC)
-  if (USE_CARMA)
-    find_package(Carma REQUIRED)
-  endif()
-  set(ARMADILLO_LIBRARIES ${ARMADILLO_LIBRARIES} ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-  
-  # Fix armadillo libraries to use release versions after they are set up
-  if(USE_RELEASE_LIBS)
-    string(REPLACE "/debug/lib/" "/lib/" ARMADILLO_LIBRARIES "${ARMADILLO_LIBRARIES}")
-    message(STATUS "Fixed ARMADILLO_LIBRARIES to use release versions")
-  endif()
-  
-  include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})  
-else()
-  include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})  
-endif() 
-
-#Inclusion of Boost
-find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
-include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+# Dependencies are now handled by cmake/FindDependencies.cmake
 
 # OpenMP
 #include(FindOpenMP)
@@ -200,127 +152,39 @@ else()
   target_link_libraries(simcoon ${ARMADILLO_LIBRARIES} Boost::system Boost::filesystem Boost::atomic)
 endif()
 
-#Define lists of executables for compilation
-set (All_exe_to_compile solver identification L_eff Elastic_props ODF PDF)
+# Include software executables
+add_subdirectory(software)
 
-#Compile public executable
-foreach (Exe_to_compile ${All_exe_to_compile})
+# Include tests
+add_subdirectory(tests)
 
-	#Add the solver executable
-	add_executable(${Exe_to_compile} software/${Exe_to_compile}.cpp)
-
-	#Link the solver executable with armadillo
-  if (MSVC AND USE_CARMA)
-    target_link_libraries(${Exe_to_compile} simcoon ${ARMADILLO_LIBRARIES} carma::carma)
-  else()
-    target_link_libraries(${Exe_to_compile} simcoon ${ARMADILLO_LIBRARIES})
-  endif()
-  if(NOT WIN32)
-    target_link_libraries(${Exe_to_compile} -ldl)
-  endif()
-
-endforeach (Exe_to_compile ${All_exe_to_compile})
-
-##Testing
-#Test files are in a separate source directory called test
-file(GLOB_RECURSE TEST_SRCS test/*.cpp)
-file(GLOB_RECURSE TEST_EXTERN test_extern/*.cpp)
-
-if(NOT MSVC)
-  add_library(umat_plugin_aba SHARED testBin/Umats/UMABA/external/UMAT_ABAQUS_ELASTIC.for testBin/Umats/UMABA/external/umat_plugin_aba.cpp)
-  set_target_properties(umat_plugin_aba PROPERTIES PREFIX "" SUFFIX "" LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/Umats/UMABA/external)
-  target_link_libraries(umat_plugin_aba simcoon ${ARMADILLO_LIBRARIES})
-endif()
-
-if(MSVC)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/Umats/UMEXT/external)
-  # Specify the output directory for each configuration (Debug, Release, etc.)
-  foreach(CONFIG_TYPE ${CMAKE_CONFIGURATION_TYPES})
-    string(TOUPPER ${CONFIG_TYPE} CONFIG)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/testBin/Umats/UMEXT/external")
-  endforeach()
-endif()
-add_library(umat_plugin_ext SHARED testBin/Umats/UMEXT/external/umat_plugin_ext.cpp)
-if(MSVC)
-  set_target_properties(umat_plugin_ext PROPERTIES PREFIX "" SUFFIX ".dll")
-  if (USE_CARMA)
-    target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES} carma::carma)
-  else()
-    target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES})
-  endif()
+# Include Python bindings (optional)
+if(BUILD_PYTHON_BINDINGS)
+    message(STATUS "Python bindings enabled - checking dependencies...")
+    
+    # Check if Python dependencies are available
+    find_package(Python3 COMPONENTS Interpreter Development NumPy QUIET)
+    find_package(pybind11 QUIET)
+    
+    if(Python3_FOUND AND Python3_NumPy_FOUND AND pybind11_FOUND)
+        message(STATUS "Python dependencies found - building Python bindings")
+        add_subdirectory(python)
+    else()
+        message(WARNING "Python bindings requested but dependencies missing:")
+        if(NOT Python3_FOUND)
+            message(WARNING "  - Python3 development headers not found")
+        endif()
+        if(NOT Python3_NumPy_FOUND)
+            message(WARNING "  - NumPy development headers not found")
+        endif()
+        if(NOT pybind11_FOUND)
+            message(WARNING "  - pybind11 not found")
+        endif()
+        message(WARNING "Continuing build without Python bindings...")
+        message(WARNING "To fix: install python3-dev, python3-numpy, and pybind11")
+    endif()
 else()
-  set_target_properties(umat_plugin_ext PROPERTIES PREFIX "" SUFFIX "" LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/Umats/UMEXT/external)
-  target_link_libraries(umat_plugin_ext simcoon ${ARMADILLO_LIBRARIES})
-endif()
-
-#Run through each source
-foreach(testSrc ${TEST_SRCS})
-
-  get_filename_component(testFolder ${testSrc} REALPATH ${CMAKE_CURRENT_SOURCE_DIR})
-  file(RELATIVE_PATH testRel ${CMAKE_CURRENT_SOURCE_DIR}/test ${testFolder})
-
-  # Extract the filename without an extension (NAME_WE)
-  get_filename_component(testName ${testRel} NAME_WE)
-  get_filename_component(testFolder ${testRel} DIRECTORY)
-
-  #Add compile target
-  add_executable(${testName} ${testSrc})
-
-  if (MSVC AND USE_CARMA)
-  	target_link_libraries(${testName} simcoon ${ARMADILLO_LIBRARIES} GTest::gtest GTest::gtest_main carma::carma)
-  else()
-  	target_link_libraries(${testName} simcoon ${ARMADILLO_LIBRARIES} GTest::gtest GTest::gtest_main)
-  endif()
-  target_include_directories(${testName} PRIVATE ${ARMADILLO_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})    
-
-  # Custom runtime output directory for test binaries
-  set_target_properties(${testName} PROPERTIES 
-      RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-      RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder})
-
-  if(MSVC)
-    add_dependencies(${testName} simcoon)
-    add_custom_command(TARGET ${testName} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_BINARY_DIR}/bin
-        ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder})
-  endif()
-
-  # Add test with proper working directory and command
-  add_test(NAME ${testFolder}/${testName} 
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}/${testName})        
-endforeach(testSrc)
-
-if(NOT MSVC)
-  #Run through each source
-  foreach(testSrc ${TEST_EXTERN})
-
-    get_filename_component(testFolder ${testSrc} REALPATH ${CMAKE_CURRENT_SOURCE_DIR})
-    file(RELATIVE_PATH testRel ${CMAKE_CURRENT_SOURCE_DIR}/test_extern ${testFolder})
-
-    # Extract the filename without an extension (NAME_WE)
-    get_filename_component(testName ${testRel} NAME_WE)
-    get_filename_component(testFolder ${testRel} DIRECTORY)
-
-    #Add compile target
-    add_executable(${testName} ${testSrc})
-
-    target_link_libraries(${testName} simcoon GTest::gtest GTest::gtest_main)
-    target_include_directories(${testName} PRIVATE ${Boost_INCLUDE_DIRS} ${ARMADILLO_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})        
-
-    # Custom runtime output directory for test binaries
-    set_target_properties(${testName} PROPERTIES 
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder})
-
-    # Add test with proper working directory and command
-    add_test(NAME ${testFolder}/${testName} 
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/testBin/${testFolder}/${testName})        
-  endforeach(testSrc)
+    message(STATUS "Python bindings disabled")
 endif()
 
 #set_property(TARGET FOR PROPERTY)

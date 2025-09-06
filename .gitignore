@@ -11,3 +11,14 @@ build/
 *.lib
 *.pdb
 *.exe
+
+# Build directories
+build*/
+install/
+_build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyd
+*.so
+*.dll
