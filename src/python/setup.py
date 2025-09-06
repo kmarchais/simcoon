@@ -32,7 +32,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     package_data={
-        'simcoon': ['*.pyd', '*.so', '*.dll'],  # Include compiled extensions
+        'simcoon': ['*.pyd', '*.so', '*.dll', '*.dylib'],  # Include compiled extensions and libraries
     },
     include_package_data=True,
     python_requires='>=3.7',

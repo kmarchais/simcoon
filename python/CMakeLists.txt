@@ -116,22 +116,14 @@ if(WIN32)
           FILES_MATCHING PATTERN "*.dll")
 else()
   # For Unix systems, install the simcoon shared library
-  install(TARGETS simcoon DESTINATION ${PYTHON_PACKAGE_DIR})
+  install(FILES $<TARGET_FILE:simcoon> DESTINATION ${PYTHON_PACKAGE_DIR})
   
   # Copy simcoon library immediately after build to the source tree for development
-  if(APPLE)
-    add_custom_command(TARGET simmit POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:simcoon>
-        ${PYTHON_PACKAGE_DIR}/
-      COMMENT "Copying simcoon library to Python package directory for development")
-  else()
-    add_custom_command(TARGET simmit POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:simcoon>
-        ${PYTHON_PACKAGE_DIR}/
-      COMMENT "Copying simcoon library to Python package directory for development")
-  endif()
+  add_custom_command(TARGET simmit POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_FILE:simcoon>
+      ${PYTHON_PACKAGE_DIR}/
+    COMMENT "Copying simcoon library to Python package directory for development")
 endif()
 
 # Tests
