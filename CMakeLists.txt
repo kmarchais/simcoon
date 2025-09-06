@@ -92,14 +92,25 @@ endif()
 include_directories(SYSTEM ${ARMADILLO_INCLUDE_DIRS})
 
 # Boost - handle both old FindBoost and new BoostConfig
-find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
-if(TARGET Boost::system)
-  # New Boost CMake config (Boost 1.70+)
+# Try new Boost config first (Boost 1.70+)
+find_package(Boost 1.57.0 QUIET CONFIG)
+if(Boost_FOUND)
+  # New Boost CMake config - find individual components
+  find_package(boost_system REQUIRED)
+  find_package(boost_filesystem REQUIRED)
+  find_package(boost_atomic REQUIRED)
   set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
+  message(STATUS "Using new Boost CMake config")
 else()
-  # Old FindBoost module
-  include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
-  set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+  # Fall back to old FindBoost module
+  find_package(Boost 1.57.0 REQUIRED COMPONENTS system filesystem atomic)
+  if(TARGET Boost::system)
+    set(BOOST_LIBRARIES Boost::system Boost::filesystem Boost::atomic)
+  else()
+    include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
+    set(BOOST_LIBRARIES ${Boost_LIBRARIES})
+  endif()
+  message(STATUS "Using legacy FindBoost module")
 endif()
 
 message(STATUS "Dependencies found successfully")
