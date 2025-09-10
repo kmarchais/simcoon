@@ -75,7 +75,7 @@ if(MSVC AND BLAS_FOUND AND LAPACK_FOUND)
   endif()
 endif()
 
-find_package(Armadillo 12.6 REQUIRED)
+find_package(Armadillo 12.6 EXACT REQUIRED)
 
 find_package(GTest REQUIRED)
 
